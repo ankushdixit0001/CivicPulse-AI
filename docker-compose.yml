@@ -42,6 +42,8 @@ services:
       MONGODB_URI: mongodb://mongo_db:27017/civicpulse
       AI_SERVICE_URL: http://ai_vision_service:5000
       CORS_ORIGIN: http://localhost:3000
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in the root .env file}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       mongo_db:
         condition: service_healthy
