@@ -6,104 +6,70 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-
-  ai_vision_service:
-    build: ./ai-vision-service
-    ports:
-      - "5000:5000"
-    environment:
-      - AI_SERVICE_PORT=5000
-    volumes:
-      - ./ai-vision-service:/app
-
-  backend_service:
-    build: ./backend-service
-    ports:
-      - "4000:4000"
-    environment:
-      - MONGO_URI=mongodb://mongo_db:27017/civicpulse
-      - AI_SERVICE_URL=http://ai_vision_service:5000
-      - CORS_ORIGIN=http://localhost:3000
-    depends_on:
-      - mongo_db
-      - ai_vision_service
-    volumes:
-      - ./backend-service:/app
-      - backend_uploads:/app/uploads
-
-  frontend_app:
-    build: ./frontend-app
-    ports:
-      - "3000:80"
-    environment:
-      - VITE_API_URL=http://localhost:4000
-      - VITE_SOCKET_URL=http://localhost:4000
-    depends_on:
-      - backend_service
-
-volumes:
-  mongo_data:
-  backend_uploads:
-version: '3.9'
-
-services:
-  mongo_db:
-    image: mongo:7
-    container_name: civicpulse-mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: civicpulse
-    volumes:
-      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   ai_vision_service:
     build:
       context: ./ai-vision-service
       dockerfile: Dockerfile
-    container_name: civicpulse-ai
     restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
-      PORT: 5000
-      PYTHONUNBUFFERED: 1
-    depends_on:
-      - mongo_db
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   backend_service:
     build:
       context: ./backend-service
       dockerfile: Dockerfile
-    container_name: civicpulse-backend
     restart: unless-stopped
     ports:
       - "4000:4000"
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 4000
       MONGODB_URI: mongodb://mongo_db:27017/civicpulse
       AI_SERVICE_URL: http://ai_vision_service:5000
       CORS_ORIGIN: http://localhost:3000
     depends_on:
-      - mongo_db
-      - ai_vision_service
+      mongo_db:
+        condition: service_healthy
+      ai_vision_service:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   frontend_app:
     build:
       context: ./frontend-app
       dockerfile: Dockerfile
-    container_name: civicpulse-frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:4000
+        VITE_SOCKET_URL: http://localhost:4000
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "3000:3000"
-    environment:
-      VITE_API_BASE_URL: http://localhost:4000
-      VITE_SOCKET_URL: http://localhost:4000
+      - "3000:80"
     depends_on:
-      - backend_service
+      backend_service:
+        condition: service_healthy
 
 volumes:
   mongo_data:
+  backend_uploads:
