@@ -22,6 +22,11 @@ CATEGORY_WEIGHTS = {
 
 app = FastAPI(title=APP_TITLE)
 
+
+@app.get("/health")
+async def health() -> Dict[str, str]:
+    return {"status": "ok", "service": "ai-vision"}
+
 try:
     model = YOLO("yolov8n.pt")
 except Exception:  # pragma: no cover - allows local dev without a downloaded model
